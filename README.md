@@ -153,7 +153,80 @@ git branch -M main
 git push -u origin main
 ```
 
-### Cập nhật code sau này
+### Làm việc với Branch (Recommended)
+
+**1. Tạo branch mới cho feature/fix:**
+```bash
+# Tạo và chuyển sang branch mới
+git checkout -b feature/ten-feature
+
+# Hoặc có thể đặt tên theo convention
+git checkout -b feature/add-new-persona
+git checkout -b fix/quiz-logic
+git checkout -b update/readme
+```
+
+**2. Làm việc trên branch:**
+```bash
+# Xem branch hiện tại
+git branch
+
+# Chỉnh sửa code...
+# Sau đó commit như bình thường
+git add .
+git commit -m "feat: thêm persona mới"
+```
+
+**3. Push branch lên GitHub:**
+```bash
+# Push lần đầu
+git push -u origin feature/ten-feature
+
+# Các lần sau
+git push
+```
+
+**4. Tạo Pull Request trên GitHub:**
+   - Truy cập repository trên GitHub
+   - Click "Compare & pull request"
+   - Viết mô tả thay đổi
+   - Click "Create pull request"
+   - Review và merge
+
+**5. Merge branch vào main (local):**
+```bash
+# Chuyển về main
+git checkout main
+
+# Pull code mới nhất từ remote
+git pull origin main
+
+# Merge branch vào main
+git merge feature/ten-feature
+
+# Push main lên remote
+git push
+```
+
+**6. Xóa branch sau khi merge:**
+```bash
+# Xóa branch local
+git branch -d feature/ten-feature
+
+# Xóa branch trên GitHub
+git push origin --delete feature/ten-feature
+```
+
+**7. Các lệnh branch hữu ích:**
+```bash
+git branch              # Xem danh sách branches local
+git branch -a           # Xem tất cả branches (cả remote)
+git branch -r           # Xem branches trên remote
+git checkout main       # Chuyển về main
+git branch -D branch-name  # Xóa branch force (nếu chưa merge)
+```
+
+### Cập nhật code trực tiếp trên main
 
 ```bash
 # Xem thay đổi
