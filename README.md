@@ -119,9 +119,80 @@ python generate_learning_data.py
 └── README.md                     # File này
 ```
 
+## Git Workflow
+
+### Push lên GitHub lần đầu
+
+1. **Khởi tạo Git repository (nếu chưa có):**
+```bash
+git init
+```
+
+2. **Thêm files vào staging:**
+```bash
+git add .
+```
+
+3. **Tạo commit đầu tiên:**
+```bash
+git commit -m "Initial commit: Learning Path Data Generator"
+```
+
+4. **Tạo repository trên GitHub:**
+   - Truy cập https://github.com/new
+   - Đặt tên repo (ví dụ: `learning-path-data-generator`)
+   - Chọn Public hoặc Private
+   - **KHÔNG** chọn "Initialize with README"
+   - Click "Create repository"
+
+5. **Link local repo với GitHub và push:**
+```bash
+# Thay YOUR_USERNAME và YOUR_REPO_NAME bằng thông tin của bạn
+git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+git branch -M main
+git push -u origin main
+```
+
+### Cập nhật code sau này
+
+```bash
+# Xem thay đổi
+git status
+
+# Thêm files đã sửa
+git add .
+
+# Commit với message
+git commit -m "Update: mô tả thay đổi"
+
+# Push lên GitHub
+git push
+```
+
+### Cấu hình Git user (lần đầu)
+
+```bash
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+```
+
+### Kiểm tra remote
+
+```bash
+git remote -v
+```
+
+### Xóa và thêm lại remote (nếu cần)
+
+```bash
+git remote remove origin
+git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+```
+
 ## Lưu ý
 
-- File `.env` chứa thông tin nhạy cảm, không push lên Git
+- File `.env` chứa thông tin nhạy cảm, không push lên Git (đã được bảo vệ bởi `.gitignore`)
+- File `.env.example` là template, cần copy thành `.env` và điền thông tin
 - Script tự động xóa dữ liệu cũ trước khi sinh dữ liệu mới
 - Thời gian sinh: 2025-11-01 đến 2026-01-01 (2 tháng)
 
