@@ -249,6 +249,7 @@ class DataGenerator:
         print("\n🗑️  Xóa dữ liệu hành vi cũ...")
         
         tables_to_clear = [
+            'course_grades',
             'reading_behavior_logs',
             'quiz_interaction_logs',
             'question_responses',
@@ -1160,6 +1161,203 @@ class DataGenerator:
         """, (log_id, user_id, attempt_id, question_id, timestamp, action_type,
               answer_given, is_correct, time_spent_ms, answer_changes_count, hint_used, Json(metadata)))
     
+    def generate_course_grades(self):
+        """Generate course grades (assignments, midterm, final) with correlation to quiz performance"""
+        print("\n📝 Tạo dữ liệu đánh giá (Course Grades)...")
+        
+        grade_count = 0
+        
+        for user in self.users:
+            user_id = user['user_id']
+            persona = self.personas[user_id]
+            
+            # Get all enrollments for this user
+            if user_id not in self.user_enrollments:
+                continue
+            
+            enrolled_courses = self.user_enrollments[user_id]
+            
+            for course_id in enrolled_courses:
+                enrollment_key = (user_id, course_id)
+                if enrollment_key not in self.enrollment_details:
+                    continue
+                
+                enrollment_info = self.enrollment_details[enrollment_key]
+                enrolled_at = enrollment_info['enrolled_at']
+                
+                # Calculate quiz performance for this user-course
+                avg_quiz_score = self._get_user_course_quiz_performance(user_id, course_id)
+                
+                # Check if user is outlier (5-10% chance)
+                is_outlier = random.random() < 0.075  # 7.5% outlier rate
+                
+                # Get last activity timestamp for this user-course to determine final exam date
+                last_activity_time = self._get_last_activity_time(user_id, course_id)
+                if last_activity_time is None:
+                    last_activity_time = enrolled_at + timedelta(days=14)
+                
+                # Calculate course duration for timeline
+                course_duration = (last_activity_time - enrolled_at).days
+                if course_duration < 7:
+                    course_duration = 30  # Default 1 month if too short
+                
+                # Generate assignments (2-3)
+                num_assignments = random.randint(2, 3)
+                assignment_dates = []
+                
+                for i in range(num_assignments):
+                    # Distribute assignments throughout the course
+                    days_offset = int(course_duration * (i + 1) / (num_assignments + 1))
+                    graded_at = enrolled_at + timedelta(days=days_offset)
+                    assignment_dates.append(graded_at)
+                    
+                    # Generate assignment score
+                    score = self._generate_grade_score(persona, 'assignment', avg_quiz_score, is_outlier)
+                    
+                    # For dropout persona, might skip later assignments
+                    if persona == PERSONA_DROPOUT and i >= 1 and random.random() < 0.5:
+                        score = 0.0  # Didn't submit
+                    
+                    grade_id = str(uuid.uuid4())
+                    self.cursor.execute("""
+                        INSERT INTO course_grades (id, user_id, course_id, assessment_type, title,
+                                                   score, weight, graded_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (grade_id, user_id, course_id, 'assignment', f'Assignment {i+1}',
+                          score, 0.20, graded_at))
+                    grade_count += 1
+                
+                # Generate midterm (at ~50% of course)
+                midterm_date = enrolled_at + timedelta(days=int(course_duration * 0.5))
+                midterm_score = self._generate_grade_score(persona, 'midterm', avg_quiz_score, is_outlier)
+                
+                # Dropout might skip midterm
+                if persona == PERSONA_DROPOUT and random.random() < 0.4:
+                    midterm_score = 0.0
+                
+                grade_id = str(uuid.uuid4())
+                self.cursor.execute("""
+                    INSERT INTO course_grades (id, user_id, course_id, assessment_type, title,
+                                               score, weight, graded_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """, (grade_id, user_id, course_id, 'midterm', 'Midterm Exam',
+                      midterm_score, 0.30, midterm_date))
+                grade_count += 1
+                
+                # Generate final exam (1-3 days after last activity)
+                final_date = last_activity_time + timedelta(days=random.randint(1, 3))
+                final_score = self._generate_grade_score(persona, 'final', avg_quiz_score, is_outlier)
+                
+                # Dropout usually fails final
+                if persona == PERSONA_DROPOUT and random.random() < 0.6:
+                    final_score = random.uniform(0.0, 3.0)
+                
+                grade_id = str(uuid.uuid4())
+                self.cursor.execute("""
+                    INSERT INTO course_grades (id, user_id, course_id, assessment_type, title,
+                                               score, weight, graded_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """, (grade_id, user_id, course_id, 'final', 'Final Exam',
+                      final_score, 0.50, final_date))
+                grade_count += 1
+        
+        self.conn.commit()
+        print(f"  ✓ Đã tạo {grade_count} đầu điểm (grades)")
+    
+    def _get_user_course_quiz_performance(self, user_id: str, course_id: str) -> float:
+        """Calculate average quiz score for a user in a course (0.0-10.0 scale)"""
+        # Get all quiz attempts for this user in this course
+        self.cursor.execute("""
+            SELECT qa.score, qa.max_score
+            FROM quiz_attempts qa
+            JOIN quizzes q ON qa.quiz_id = q.id
+            JOIN modules m ON q.module_id = m.id
+            WHERE qa.user_id = %s AND m.course_id = %s
+        """, (user_id, course_id))
+        
+        results = self.cursor.fetchall()
+        if not results:
+            # No quiz data, return default based on persona
+            persona = self.personas[user_id]
+            if persona == PERSONA_DILIGENT:
+                return 8.5
+            elif persona == PERSONA_AVERAGE:
+                return 6.5
+            elif persona == PERSONA_STRUGGLING:
+                return 4.5
+            else:
+                return 3.0
+        
+        # Calculate average percentage, then convert to 0-10 scale
+        total_percentage = 0
+        for score, max_score in results:
+            if max_score > 0:
+                total_percentage += (score / max_score)
+        
+        avg_percentage = total_percentage / len(results)
+        return round(avg_percentage * 10, 2)  # Convert to 0-10 scale
+    
+    def _get_last_activity_time(self, user_id: str, course_id: str) -> datetime:
+        """Get the last activity timestamp for a user in a course"""
+        # Check activity_logs
+        self.cursor.execute("""
+            SELECT MAX(timestamp) FROM activity_logs
+            WHERE user_id = %s AND (
+                resource_id IN (SELECT id FROM modules WHERE course_id = %s)
+                OR resource_id IN (SELECT id FROM lessons WHERE module_id IN (SELECT id FROM modules WHERE course_id = %s))
+                OR resource_id IN (SELECT id FROM quizzes WHERE module_id IN (SELECT id FROM modules WHERE course_id = %s))
+            )
+        """, (user_id, course_id, course_id, course_id))
+        
+        result = self.cursor.fetchone()
+        last_time = result[0] if result and result[0] else None
+        
+        # Remove timezone info if present to match START_DATE (timezone-naive)
+        if last_time and hasattr(last_time, 'tzinfo') and last_time.tzinfo:
+            last_time = last_time.replace(tzinfo=None)
+        
+        return last_time
+    
+    def _generate_grade_score(self, persona: str, assessment_type: str, quiz_avg: float, is_outlier: bool) -> float:
+        """Generate a grade score correlated with persona and quiz performance"""
+        # Base means and std devs by persona
+        if persona == PERSONA_DILIGENT:
+            base_mean = 8.5
+            base_std = 1.0
+        elif persona == PERSONA_AVERAGE:
+            base_mean = 6.5
+            base_std = 2.0
+        elif persona == PERSONA_STRUGGLING:
+            base_mean = 4.5
+            base_std = 2.0
+        else:  # DROPOUT
+            base_mean = 3.5
+            base_std = 2.5
+        
+        # Adjust mean based on quiz performance (correlation)
+        # If quiz avg is higher/lower than expected, adjust grade accordingly
+        quiz_influence = 0.3  # 30% influence from quiz performance
+        adjusted_mean = base_mean * (1 - quiz_influence) + quiz_avg * quiz_influence
+        
+        # Generate score with normal distribution
+        score = random.gauss(adjusted_mean, base_std)
+        
+        # Apply outlier logic (5-10% chance)
+        if is_outlier:
+            # Reverse score (good student gets bad grade, bad student gets good grade)
+            if persona == PERSONA_DILIGENT:
+                # Usually high score, outlier = low score
+                score = random.uniform(4.0, 6.0)
+            elif persona in [PERSONA_STRUGGLING, PERSONA_DROPOUT]:
+                # Usually low score, outlier = high score
+                score = random.uniform(7.5, 9.5)
+        
+        # Clamp to 0-10 range
+        score = max(0.0, min(10.0, score))
+        
+        # Round to 1 decimal
+        return round(score, 1)
+    
     def print_statistics(self):
         """Print data statistics"""
         print("\n" + "=" * 60)
@@ -1169,7 +1367,7 @@ class DataGenerator:
         tables = [
             'profiles', 'user_roles', 'enrollments', 'user_sessions',
             'activity_logs', 'lesson_progress', 'quiz_attempts', 'question_responses',
-            'quiz_interaction_logs', 'reading_behavior_logs', 'interaction_logs'
+            'quiz_interaction_logs', 'reading_behavior_logs', 'interaction_logs', 'course_grades'
         ]
         
         for table in tables:
@@ -1207,6 +1405,7 @@ def main():
         generator.generate_users(20)
         generator.generate_enrollments()
         generator.generate_learning_behavior()
+        generator.generate_course_grades()
         generator.print_statistics()
         
         print("\n✓ HOÀN THÀNH!\n")

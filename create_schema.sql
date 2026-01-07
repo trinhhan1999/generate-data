@@ -8,6 +8,7 @@ CREATE SCHEMA IF NOT EXISTS transform;
 SET search_path TO transform, public;
 
 -- Drop tables if they exist (in reverse order of dependencies)
+DROP TABLE IF EXISTS course_grades CASCADE;
 DROP TABLE IF EXISTS reading_behavior_logs CASCADE;
 DROP TABLE IF EXISTS quiz_interaction_logs CASCADE;
 DROP TABLE IF EXISTS question_responses CASCADE;
@@ -266,6 +267,19 @@ CREATE TABLE reading_behavior_logs (
     metadata JSONB
 );
 
+-- Course grades table (Offline/Summative Assessments)
+CREATE TABLE course_grades (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL,
+    course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    assessment_type VARCHAR(50) NOT NULL CHECK (assessment_type IN ('assignment', 'midterm', 'final')),
+    title VARCHAR(255) NOT NULL,
+    score NUMERIC(4, 2) NOT NULL CHECK (score >= 0 AND score <= 10),
+    weight NUMERIC(3, 2) NOT NULL CHECK (weight >= 0 AND weight <= 1),
+    graded_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Create indexes for better query performance
 CREATE INDEX idx_profiles_user_id ON profiles(user_id);
 CREATE INDEX idx_user_roles_user_id ON user_roles(user_id);
@@ -293,6 +307,9 @@ CREATE INDEX idx_question_responses_question_id ON question_responses(question_i
 CREATE INDEX idx_quiz_interaction_logs_user_id ON quiz_interaction_logs(user_id);
 CREATE INDEX idx_reading_behavior_logs_user_id ON reading_behavior_logs(user_id);
 CREATE INDEX idx_reading_behavior_logs_lesson_id ON reading_behavior_logs(lesson_id);
+CREATE INDEX idx_course_grades_user_id ON course_grades(user_id);
+CREATE INDEX idx_course_grades_course_id ON course_grades(course_id);
+CREATE INDEX idx_course_grades_assessment_type ON course_grades(assessment_type);
 
 -- Comments
 COMMENT ON TABLE profiles IS 'User profile information';
@@ -307,6 +324,7 @@ COMMENT ON TABLE questions IS 'Quiz questions';
 COMMENT ON TABLE quiz_attempts IS 'User quiz attempts';
 COMMENT ON TABLE question_responses IS 'User answers to quiz questions';
 COMMENT ON TABLE user_sessions IS 'User session tracking';
+COMMENT ON TABLE course_grades IS 'Offline/summative assessment grades (assignments, midterm, final exams)';
 COMMENT ON TABLE interaction_logs IS 'User interaction events';
 COMMENT ON TABLE quiz_interaction_logs IS 'Quiz-specific interaction events';
 COMMENT ON TABLE reading_behavior_logs IS 'Reading behavior analytics';
