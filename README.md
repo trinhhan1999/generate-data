@@ -226,6 +226,30 @@ git checkout main       # Chuyển về main
 git branch -D branch-name  # Xóa branch force (nếu chưa merge)
 ```
 
+**8. Reset branch về trạng thái ban đầu (clean slate):**
+```bash
+# Chuyển sang branch cần reset
+git checkout feature/your-branch
+
+# Reset về trạng thái của main (xóa tất cả commit)
+git reset --hard main
+
+# Xóa tất cả file chưa tracked
+git clean -fd
+
+# Kiểm tra workspace đã sạch
+git status
+
+# Force push nếu đã push branch lên remote
+git push -f origin feature/your-branch
+```
+
+**⚠️ Lưu ý khi reset:**
+- `git reset --hard` sẽ **xóa vĩnh viễn** tất cả thay đổi đã commit và chưa commit
+- `git clean -fd` sẽ xóa tất cả file/folder chưa được track bởi Git
+- `-f` (force push) sẽ ghi đè lịch sử trên remote
+- **Chỉ dùng khi:** làm việc một mình trên branch hoặc muốn bỏ tất cả thay đổi
+
 ### Cập nhật code trực tiếp trên main
 
 ```bash
